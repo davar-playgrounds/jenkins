@@ -24,5 +24,5 @@ oc create secret generic slack-token-secret \
 
 # Apply and execute the OpenShift template
 oc apply -f openshift-template.yml
-oc process openshift-jenkins GIT_BRANCH=${GIT_BRANCH} | oc apply -f -
-oc start-build openshift-jenkins
+oc process jenkins GIT_BRANCH=${GIT_BRANCH} | oc apply -f -
+oc start-build jenkins
