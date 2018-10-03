@@ -118,11 +118,11 @@ objects:
             value: "true"
           - name: JNLP_SERVICE_NAME
             value: ${JNLP_SERVICE_NAME}
-          # - name: SLACK_TOKEN
-          #   valueFrom:
-          #     secretKeyRef:
-          #       name: slack-token-secret
-          #       key: slack-token
+          - name: SLACK_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: slack-token-secret
+                key: slack-token
           - name: NEW_RELIC_API_KEY
             valueFrom:
               secretKeyRef:
