@@ -1,0 +1,6 @@
+build-monitor-plugin:latest
+greenballs:latest
+lockable-resources:latest
+slack:latest
+ssh-agent:latest
+ansicolor:latest

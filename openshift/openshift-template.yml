@@ -1,0 +1,236 @@
+apiVersion: v1
+kind: Template
+labels:
+  template: openshift-jenkins
+metadata:
+  name: openshift-jenkins
+parameters:
+- name: GIT_REPO
+  required: true
+  value: 'git@github.com:raizv/jenkins.git'
+- name: GIT_BRANCH
+  value: master
+- description: The name of the OpenShift Service exposed for the Jenkins container.
+  displayName: Jenkins Service Name
+  name: JENKINS_SERVICE_NAME
+  value: jenkins
+- description: The name of the service used for master/slave communication.
+  displayName: Jenkins JNLP Service Name
+  name: JNLP_SERVICE_NAME
+  value: jenkins-jnlp
+- description: Whether to enable OAuth OpenShift integration. If false, the static
+    account 'admin' will be initialized with the password 'password'.
+  displayName: Enable OAuth in Jenkins
+  name: ENABLE_OAUTH
+  value: "true"
+- description: Whether Jenkins runs with a 32 bit (i386) or 64 bit (x86_64) JVM.
+  displayName: Jenkins JVM Architecture
+  name: JVM_ARCH
+  value: i386
+- description: Maximum amount of memory the container can use.
+  displayName: Memory Limit
+  name: MEMORY_LIMIT
+  value: 1024Mi
+- description: Maximum amount of CPU the container can use, measured in millicores
+  displayName: CPU limit
+  name: CPU_LIMIT
+  value: 1000m
+- description: Request normal CPU usage for the container, measured in millicores
+  displayName: CPU request
+  name: CPU_REQUEST
+  value: 100m
+- description: Name of the ImageStreamTag to be used for the Jenkins image.
+  displayName: Jenkins ImageStreamTag
+  name: JENKINS_IMAGE_STREAM_TAG
+  value: jenkins:latest
+objects:
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+- kind: BuildConfig
+  apiVersion: v1
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+  spec:
+    source:
+      type: Git
+      git:
+        uri: ${GIT_REPO}
+        ref: ${GIT_BRANCH}
+      sourceSecret:
+        name: github-secret
+    runPolicy: Serial
+    strategy:
+      type: Docker
+      dockerStrategy:
+        forcePull: true
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${JENKINS_SERVICE_NAME}:latest
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+  spec:
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    to:
+      kind: Service
+      name: ${JENKINS_SERVICE_NAME}
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+  spec:
+    replicas: 1
+    selector:
+      name: ${JENKINS_SERVICE_NAME}
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          name: ${JENKINS_SERVICE_NAME}
+      spec:
+        containers:
+        - capabilities: {}
+          env:
+          - name: OPENSHIFT_ENABLE_OAUTH
+            value: ${ENABLE_OAUTH}
+          - name: OPENSHIFT_ENABLE_REDIRECT_PROMPT
+            value: "true"
+          - name: OPENSHIFT_JENKINS_JVM_ARCH
+            value: ${JVM_ARCH}
+          - name: KUBERNETES_MASTER
+            value: https://kubernetes.default:443
+          - name: KUBERNETES_TRUST_CERTIFICATES
+            value: "true"
+          - name: JNLP_SERVICE_NAME
+            value: ${JNLP_SERVICE_NAME}
+          # - name: SLACK_TOKEN
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: slack-token-secret
+          #       key: slack-token
+          - name: NEW_RELIC_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: newrelic-api-secret
+                key: newrelic-key
+          image: ' '
+          imagePullPolicy: Always
+          livenessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 420
+            timeoutSeconds: 3
+          name: jenkins
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+            initialDelaySeconds: 3
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: ${CPU_REQUEST}
+              memory: ${MEMORY_LIMIT}
+            limits:
+              memory: ${MEMORY_LIMIT}
+              cpu: ${CPU_LIMIT}
+          securityContext:
+            capabilities: {}
+            privileged: false
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+          - mountPath: /var/lib/jenkins
+            name: ${JENKINS_SERVICE_NAME}-data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        serviceAccountName: ${JENKINS_SERVICE_NAME}
+        volumes:
+        - emptyDir:
+            medium: ""
+          name: ${JENKINS_SERVICE_NAME}-data
+    triggers:
+    - type: ConfigChange
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - jenkins
+        from:
+          kind: ImageStreamTag
+          name: ${JENKINS_IMAGE_STREAM_TAG}
+        lastTriggeredImage: ""
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    annotations:
+      serviceaccounts.openshift.io/oauth-redirectreference.jenkins: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"${JENKINS_SERVICE_NAME}"}}'
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+- apiVersion: v1
+  groupNames: null
+  kind: RoleBinding
+  metadata:
+    name: ${JENKINS_SERVICE_NAME}_edit
+    labels:
+      app: openshift-jenkins
+  roleRef:
+    name: edit
+  subjects:
+  - kind: ServiceAccount
+    name: ${JENKINS_SERVICE_NAME}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${JNLP_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+  spec:
+    ports:
+    - name: agent
+      nodePort: 0
+      port: 50000
+      protocol: TCP
+      targetPort: 50000
+    selector:
+      name: ${JENKINS_SERVICE_NAME}
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      service.alpha.openshift.io/dependencies: '[{"name": "${JNLP_SERVICE_NAME}",
+        "namespace": "", "kind": "Service"}]'
+      service.openshift.io/infrastructure: "true"
+    name: ${JENKINS_SERVICE_NAME}
+    labels:
+      app: openshift-jenkins
+  spec:
+    ports:
+    - name: web
+      nodePort: 0
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      name: ${JENKINS_SERVICE_NAME}
+    sessionAffinity: None
+    type: ClusterIP
