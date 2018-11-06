@@ -1,4 +1,5 @@
-FROM openshift/jenkins-2-centos7:v3.8.36
+#FROM openshift/jenkins-2-centos7:v3.8.36
+FROM registry.access.redhat.com/openshift3/jenkins-2-rhel7:v3.8.36
 
 RUN rm -rf /opt/openshift/configuration/jobs/OpenShift\ Sample
 
