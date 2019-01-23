@@ -10,7 +10,8 @@ GIT_BRANCH=${1:-master}
 oc project
 
 # Github SSH Key
-oc create secret generic github-secret --from-file=ssh-privatekey=id_rsa --dry-run -o yaml | oc apply -f -
+SSH_KEY=$(cat ~/.ssh/id_rsa)
+oc create secret generic github-secret --from-literal=ssh-privatekey="${SSH_KEY}" --dry-run -o yaml | oc apply -f -
 
 # Newrelic API Key
 oc create secret generic newrelic-api-secret \
