@@ -1,4 +1,4 @@
-FROM openshift/jenkins-2-centos7:v3.9
+FROM openshift/jenkins-2-centos7:v3.11
 
 RUN rm -rf /opt/openshift/configuration/jobs/OpenShift\ Sample
 
